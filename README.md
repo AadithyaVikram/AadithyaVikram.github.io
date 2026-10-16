@@ -30,6 +30,31 @@ Original source pages are retained under `assets/*-original.html` for content re
 
 Google Fonts enhances typography; system fonts provide a fallback if unavailable.
 
+## Animated hero and LinkedIn activity
+
+The hero uses CSS orbit and floating animations plus small mouse parallax. It includes a pause/resume control, respects the system reduced-motion preference, and pauses while the browser tab is hidden. It runs directly on GitHub Pages without a backend.
+
+`assets/linkedin-updates.json` holds curated achievements and optionally synchronized public posts. The page includes static achievement cards as a fallback if JavaScript or the data request fails. Reviewed dates and API sync dates are shown separately; the page does not claim to be a live feed. Edit both the JSON highlights and fallback HTML cards when manually changing achievements.
+
+Achievements reviewed October 16, 2026: Q1 India Performance Champion, EPAM recognition badges, and the Claude credential. The award/badge posts are attributed to Aadithya in public LinkedIn activity at https://in.linkedin.com/in/aryan-vedy. Exact dates and post permalinks were not exposed, so the cards link to your activity page. No award year, badge names, or performance metrics are inferred.
+
+### Optional scheduled updates (requires setup)
+
+Direct browser access to private LinkedIn data is not used. The official Posts API restricts `r_member_social` to approved applications: https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api. Installing a ChatGPT plugin does not supply credentials to GitHub Actions.
+
+The included workflow is **not connected yet**. For an approved LinkedIn application:
+
+1. Obtain a member access token with approved `r_member_social` access and the matching member author URN. Basic LinkedIn sign-in or `w_member_social` alone does not permit reading posts.
+2. In GitHub **Settings → Secrets and variables → Actions**, add repository secrets `LINKEDIN_ACCESS_TOKEN` and `LINKEDIN_AUTHOR_URN` (format `urn:li:person:...`). Never put tokens in site files or chat.
+3. Add repository variable `LINKEDIN_API_VERSION` with a currently supported `YYYYMM` version from the official documentation. Maintain this value as API versions retire and renew the token when it expires.
+4. Enable Actions and, under **Settings → Actions → General → Workflow permissions**, allow GitHub Actions to create pull requests.
+5. Run **Actions → Review LinkedIn updates → Run workflow**. It also runs Mondays at 09:00 India time once pushed to the default branch. Without credentials it skips the API call and leaves existing content intact.
+6. Review and merge the generated content PR to publish through your existing GitHub Pages setup. Changes are not automatically merged. The workflow only modifies public posts; it does not rewrite achievements, biography, employment, or certificates from unverified text.
+
+Only public, published posts authored by the configured member are included. Reshares are excluded; empty or failed responses preserve existing content. No dependencies need to be installed. Run `python -m unittest discover -s tests` for the sync checks.
+
+Without approved API access, the curated highlights and the link to your LinkedIn activity still work. Update the JSON manually as you post new milestones; automatic LinkedIn synchronization is unavailable until the connection is configured.
+
 ## Content sources (updated October 16, 2026)
 
 The public profile at https://in.linkedin.com/in/aadithya-vikram matches the name, college, dates, and both projects in the original portfolio. It lists EPAM Systems in Hyderabad, an 8.87 CGPA, certifications, and both publications. The owner confirmed: Data Engineer at EPAM Systems since June 2024. The supplied older LinkedIn URL remains in the social links.

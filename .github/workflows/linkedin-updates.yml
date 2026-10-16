@@ -1,0 +1,60 @@
+name: Review LinkedIn updates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 3 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: linkedin-updates
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+      LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
+      LINKEDIN_API_VERSION: ${{ vars.LINKEDIN_API_VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check connection setup
+        id: connection
+        shell: bash
+        run: |
+          if [[ -n "$LINKEDIN_ACCESS_TOKEN" && -n "$LINKEDIN_AUTHOR_URN" && -n "$LINKEDIN_API_VERSION" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::LinkedIn synchronization is not configured. See README.md. Existing highlights remain available."
+          fi
+      - name: Fetch public authored posts
+        if: steps.connection.outputs.ready == 'true'
+        run: python scripts/sync_linkedin.py
+      - name: Propose content update
+        if: steps.connection.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if git diff --quiet -- assets/linkedin-updates.json; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B automation/linkedin-updates
+          git add assets/linkedin-updates.json
+          git commit -m 'Refresh public LinkedIn posts'
+          git push --force-with-lease origin automation/linkedin-updates
+          existing=$(gh pr list --head automation/linkedin-updates --state open --json number --jq 'length')
+          if [[ "$existing" == '0' ]]; then
+            gh pr create --base "$GITHUB_REF_NAME" --head automation/linkedin-updates --title 'Refresh LinkedIn activity' --body 'Updates public posts from the authorized LinkedIn member. Review the content and merge to publish through the existing GitHub Pages deployment. Curated achievements, biography, and employment details are unchanged.'
+          fi

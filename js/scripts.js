@@ -1,4 +1,30 @@
 'use strict';
+const heroArt = document.querySelector('.hero-art');
+const motionButton = document.querySelector('.motion-toggle');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+heroArt.classList.add('motion-ready');
+let pausedByUser = false;
+function updateMotion() {
+ const paused = pausedByUser || reducedMotion.matches || document.hidden;
+ heroArt.classList.toggle('is-paused', paused);
+ motionButton.setAttribute('aria-pressed', String(pausedByUser));
+ motionButton.setAttribute('aria-label', pausedByUser ? 'Resume illustration animation' : 'Pause illustration animation');
+ motionButton.textContent = pausedByUser ? 'Resume animation' : 'Pause animation';
+}
+motionButton.addEventListener('click', () => { pausedByUser = !pausedByUser; updateMotion(); });
+reducedMotion.addEventListener('change', updateMotion);
+document.addEventListener('visibilitychange', updateMotion);
+heroArt.addEventListener('pointermove', event => {
+ if (event.pointerType !== 'mouse' || reducedMotion.matches || pausedByUser) return;
+ const bounds = heroArt.getBoundingClientRect();
+ heroArt.style.setProperty('--pointer-x', `${(event.clientX - bounds.left - bounds.width / 2) * .025}px`);
+ heroArt.style.setProperty('--pointer-y', `${(event.clientY - bounds.top - bounds.height / 2) * .025}px`);
+});
+heroArt.addEventListener('pointerleave', () => {
+ heroArt.style.setProperty('--pointer-x', '0px');
+ heroArt.style.setProperty('--pointer-y', '0px');
+});
+updateMotion();
 const themeButton = document.querySelector('.theme-toggle');
 const preference = matchMedia('(prefers-color-scheme: dark)');
 function updateThemeLabel() {
@@ -66,6 +92,50 @@ fetch('assets/certificates.json').then(response => {
 });
 search.addEventListener('input', renderCertificates);
 more.addEventListener('click', () => { expanded = !expanded; renderCertificates(); });
+// Same-origin JSON works both at a user Pages root and a project subdirectory.
+// Keep the HTML highlights as a fallback if loading fails or JavaScript is disabled.
+function linkedinUrl(value) {
+ try {
+  const url = new URL(value);
+  return url.protocol === 'https:' && (url.hostname === 'linkedin.com' || url.hostname.endsWith('.linkedin.com')) ? url.href : null;
+ } catch (_) { return null; }
+}
+function createUpdateCard(item, isPost = false) {
+ const url = linkedinUrl(item.url);
+ if (!url || typeof item.title !== 'string' || typeof item.summary !== 'string') return null;
+ const article = document.createElement('article'); article.className = 'update-card';
+ const label = document.createElement('p'); label.className = 'eyebrow';
+ const date = new Date(item.publishedAt);
+ label.textContent = isPost && !Number.isNaN(date.getTime())
+  ? date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' })
+  : item.category || 'LinkedIn';
+ const title = document.createElement('h3'); title.textContent = item.title;
+ const summary = document.createElement('p'); summary.textContent = item.summary;
+ const link = document.createElement('a'); link.className = 'text-link'; link.href = url;
+ link.target = '_blank'; link.rel = 'noopener noreferrer';
+ link.textContent = isPost ? 'Read post on LinkedIn ↗' : 'View LinkedIn activity ↗';
+ article.append(label, title, summary, link);
+ return article;
+}
+fetch('assets/linkedin-updates.json').then(response => {
+ if (!response.ok) throw new Error('Highlights unavailable');
+ return response.json();
+}).then(data => {
+ const highlights = (Array.isArray(data.highlights) ? data.highlights : []).map(item => createUpdateCard(item)).filter(Boolean);
+ if (highlights.length) document.getElementById('linkedin-highlights').replaceChildren(...highlights);
+ const posts = (Array.isArray(data.posts) ? data.posts : []).slice(0, 6).map(item => createUpdateCard(item, true)).filter(Boolean);
+ if (posts.length) {
+  document.getElementById('linkedin-post-list').replaceChildren(...posts);
+  document.getElementById('linkedin-posts').hidden = false;
+ }
+ const reviewed = new Date(`${data.reviewedAt}T00:00:00+05:30`);
+ const synced = new Date(data.syncedAt);
+ const format = date => date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+ if (!Number.isNaN(reviewed.getTime())) {
+  document.getElementById('updates-status').textContent = `Selected LinkedIn highlights · reviewed ${format(reviewed)}`
+   + (data.syncedAt && !Number.isNaN(synced.getTime()) ? ` · posts synced ${format(synced)}` : '');
+ }
+}).catch(() => { /* Verified static highlights remain visible. */ });
 if ('IntersectionObserver' in window) {
  const observer = new IntersectionObserver(entries => entries.forEach(entry => {
   if (!entry.isIntersecting) return;
